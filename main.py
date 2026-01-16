@@ -1,26 +1,31 @@
 from langgraph.graph import StateGraph, START, END
 from typing import TypedDict
+from state import InvoiceState
 
-class MyState(TypedDict):
-    message: str
 
 def intake(state):
-    return {"message": state["message"] + " → passed through INTAKE"}
+    return {"raw_id": "INV-001", "ingest_ts": "2025-01-15" , "validated": True} #{"message": state["invoice_payload"]}
 
 def understand(state):
-    return {"message": state["message"] + " → passed through UNDERSTAND"}
+    return {"parsed_invoice": {} }
 
 def prepare(state):
-    return {"message": state["message"] + " -> passed through PREPARE"}
+    return {"vendor_profile": {},  "normalised_invoice":{}, "flags": {}}
 
 def retrieve(state):
-    return {"message": state["message"] +  " -> passed through RETRIEVE"}
+    return {
+        "matched_pos": [],
+        "matched_grns": [],
+        "history": []
+    }
 
 def match_two_way(state):
     return {
-        "message": state["message"] +  " -> passed through MATCH_TWO_WAY",
-        "match_result": "FAILED"}
-
+        "match_score": 0.95,
+        "match_result": "MATCHED",  # or "FAILED"
+        "tolerance_pct": 0.05,
+        "match_evidence": {}
+    }
 
 def decision(state):
     if state["match_result"] == "MATCHED":
@@ -28,13 +33,12 @@ def decision(state):
     else:
         return "CHECKPOINT_HITL" 
 
-def reconcile(state):
-    return {"message": state["message"] + "passed through RECONCILE"} 
-
 def checkpoint_hitl(state):
     return {
-        "message": state["message"] + "passed through CHECKPOINT_HITL",
-        "match_result": "REJECT"} 
+        "hitl_checkpoint_id": "HITL-001",
+        "review_url": "http://review.com/123",
+        "paused_reason": "Manual review required"
+    }
 
 def hitl_decision(state):
     if state["match_result"] == "ACCEPT":
@@ -42,19 +46,39 @@ def hitl_decision(state):
     else:
         return "REJECT"
 
+def reconcile(state):
+    return {
+        "accounting_entries": [],
+        "reconciliation_report": {}
+    }
+
 def approve(state):
-    return {"message": state["message"] + "passed through APPROVE"} 
+    return {
+        "approval_status": "AUTO_APPROVED",
+        "approver_id": "SYSTEM"
+    }
 
 def posting(state):
-    return {"message": state["message"] + "passed through POSTING"} 
+    return {
+        "posted": True,
+        "erp_txn_id": "TXN-12345",
+        "scheduled_payment_id": "PAY-001"
+    }
 
 def notify(state):
-    return {"message": state["message"] + "passed through NOTIFY"}
+    return {
+        "notify_status": {"email": "sent"},
+        "notified_parties": ["vendor", "finance"]
+    }
 
 def complete(state):
-    return {"message": state["message"] + "passed through COMPLETE"}  
+    return {
+        "final_payload": state,
+        "audit_log": [],
+        "status": "COMPLETED"
+    }  
 
-graph = StateGraph(MyState)
+graph = StateGraph(InvoiceState)
 graph.add_node("INTAKE", intake)
 graph.add_node("UNDERSTAND", understand)
 graph.add_node("PREPARE", prepare)
@@ -96,5 +120,5 @@ graph.add_edge("COMPLETE", END)
 
 
 app = graph.compile()
-result = app.invoke({"message" : "hello"})
+result = app.invoke({"invoice_payload": {"invoice_id": "INV-001", "vendor_name": "Acme Corp", "amount": 1000}})
 print(result)
